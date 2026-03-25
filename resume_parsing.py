@@ -1,10 +1,10 @@
 import os
+import boto3
 import re
 import json
 import threading
 from typing import Any, Dict, List, Optional
 
-import boto3
 from botocore.config import Config
 from pypdf import PdfReader
 from dotenv import load_dotenv
@@ -336,7 +336,7 @@ def main():
     region = os.getenv("AWS_REGION", "us-east-1")
     model_id = os.getenv("BEDROCK_MODEL_ID", "anthropic.claude-3-5-sonnet-20240620-v1:0")
 
-    resumes_dir = os.getenv("RESUMES_DIR", "Fallback_Resumes")
+    resumes_dir = os.getenv("RESUMES_DIR", "Resume_Bank")
     outputs_dir = os.getenv("OUTPUTS_DIR", "New_Resume_Json")
 
     max_workers = int(os.getenv("MAX_WORKERS", "8"))
