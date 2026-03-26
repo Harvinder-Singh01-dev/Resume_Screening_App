@@ -50,10 +50,6 @@ def get_logo_base64(logo_path: str = "minda_logo.png") -> Optional[str]:
 
 LOGO_B64 = get_logo_base64("minda_logo.png")
 
-
-# ============================================================
-# GLOBAL STYLES
-# ============================================================
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap');
@@ -305,25 +301,26 @@ hr {
 </style>
 """, unsafe_allow_html=True)
 
-
-# ============================================================
-# CONFIG
-# ============================================================
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
+S3_REGION = os.getenv("S3_REGION", "ap-south-1")
+EMBED_MODEL_ID = os.getenv("EMBED_MODEL_ID", "amazon.titan-embed-text-v1") # amazon.titan-embed-text-v1
+print(f'Embedd model id {EMBED_MODEL_ID}')
+LLM_MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "anthropic.claude-3-5-sonnet-20240620-v1:0") # anthropic.claude-3-5-sonnet-20240620-v1:0
+print(f'llm model id {LLM_MODEL_ID}')
 
-EMBED_MODEL_ID = os.getenv("EMBED_MODEL_ID", "amazon.titan-embed-text-v1")
-LLM_MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "anthropic.claude-3-5-sonnet-20240620-v1:0")
-
-# Same EC2 instance as Qdrant Docker
 QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
+print(f'Qdrant host {QDRANT_HOST}')
 QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
+print(f'Qdrant port {QDRANT_PORT}')
 COLLECTION = os.getenv("QDRANT_COLLECTION", "candidates")
+print(f'Collection name {COLLECTION}')
 
 RAW_RESUME_BUCKET = os.getenv("RAW_RESUME_BUCKET", "")
+print("Raw Resume Bucket : ", RAW_RESUME_BUCKET)
 PARSED_RESUME_BUCKET = os.getenv("PARSED_RESUME_BUCKET", "")
-
-# Raw bucket path structure: Resume_Bank/<Department>/file.pdf
+print("Parsed Resume Bucket : ", PARSED_RESUME_BUCKET)
 RAW_RESUME_PREFIX = os.getenv("RAW_RESUME_PREFIX", "Resume_Bank")
+print("Raw Resume Suffix : ", RAW_RESUME_PREFIX)
 
 MAX_WORKERS = int(os.getenv("PROCESS_MAX_WORKERS", "4"))
 
@@ -353,10 +350,6 @@ def get_clients():
 
 s3_client, client, bedrock_runtime = get_clients()
 
-
-# ============================================================
-# S3 HELPERS
-# ============================================================
 def s3_put_bytes(bucket: str, key: str, data: bytes, content_type: str) -> None:
     s3_client.put_object(
         Bucket=bucket,
@@ -365,7 +358,6 @@ def s3_put_bytes(bucket: str, key: str, data: bytes, content_type: str) -> None:
         ContentType=content_type,
     )
 
-
 def s3_put_json(bucket: str, key: str, payload: dict) -> None:
     s3_client.put_object(
         Bucket=bucket,
@@ -373,7 +365,6 @@ def s3_put_json(bucket: str, key: str, payload: dict) -> None:
         Body=json.dumps(payload, ensure_ascii=False, indent=2).encode("utf-8"),
         ContentType="application/json",
     )
-
 
 def s3_get_bytes(bucket: str, key: str) -> bytes:
     obj = s3_client.get_object(Bucket=bucket, Key=key)
