@@ -31,8 +31,7 @@ from qdrant_client.http import models as qmodels
 # PAGE CONFIG
 # ============================================================
 st.set_page_config(
-    page_title="Resume Intelligence Portal",
-    page_icon="📋",
+    page_title="Resume Intelligence Engine",
     layout="wide",
     initial_sidebar_state="expanded",
 )
