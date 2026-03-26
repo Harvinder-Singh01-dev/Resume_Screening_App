@@ -9,6 +9,16 @@ from typing import Any, Dict, List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 load_dotenv()
+
+# ── Streamlit server config (must happen before any st.* call) ───────────────
+# Fixes "AxiosError: Request failed with status code 403" on EC2.
+# When the app is accessed via a public IP/domain, Streamlit's built-in XSRF
+# and CORS protection blocks every file upload and API call from the browser.
+os.environ.setdefault("STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION", "false")
+os.environ.setdefault("STREAMLIT_SERVER_ENABLE_CORS", "false")
+os.environ.setdefault("STREAMLIT_SERVER_HEADLESS", "true")
+os.environ.setdefault("STREAMLIT_SERVER_MAX_UPLOAD_SIZE", "200")
+
 import streamlit as st
 import boto3
 from botocore.config import Config
@@ -341,8 +351,10 @@ def get_clients():
         retries={"max_attempts": 5}
     )
 
-    s3 = boto3.client("s3", region_name='ap-south-1', config=cfg, verify = False )
-    bedrock = boto3.client("bedrock-runtime", region_name=AWS_REGION, config=cfg, verify = False)
+    # verify=False removed — it breaks SigV4 signing used by EC2 IAM roles and
+    # is a security risk. S3 region now reads from S3_REGION env var (not hardcoded).
+    s3 = boto3.client("s3", region_name=S3_REGION, config=cfg)
+    bedrock = boto3.client("bedrock-runtime", region_name=AWS_REGION, config=cfg)
     qdrant = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, timeout=60)
 
     return s3, qdrant, bedrock
@@ -391,8 +403,9 @@ def build_parsed_resume_key(department: str, filename: str) -> str:
 # ============================================================
 # BEDROCK EMBEDDING
 # ============================================================
-@st.cache_data(show_spinner=False)
 def bedrock_embed(text: str) -> List[float]:
+    # NOTE: @st.cache_data intentionally removed — it is not thread-safe and
+    # causes silent failures when called from ThreadPoolExecutor workers.
     text = (text or "").strip() or "N/A"
     resp = bedrock_runtime.invoke_model(
         modelId=EMBED_MODEL_ID,
@@ -1122,7 +1135,10 @@ def process_uploaded_resumes(uploaded_files, department: str) -> Tuple[int, int,
         return 0, 0, 0, []
 
     if not RAW_RESUME_BUCKET or not PARSED_RESUME_BUCKET:
-        raise ValueError("RAW_RESUME_BUCKET and PARSED_RESUME_BUCKET must be configured.")
+        raise ValueError(
+            "RAW_RESUME_BUCKET and PARSED_RESUME_BUCKET env vars must be set. "
+            "Check your .env or EC2 environment."
+        )
 
     tmpdir = os.path.join(tempfile.gettempdir(), "resume_screening_uploads")
     os.makedirs(tmpdir, exist_ok=True)
@@ -1132,7 +1148,12 @@ def process_uploaded_resumes(uploaded_files, department: str) -> Tuple[int, int,
 
     for uf in uploaded_files:
         fn = _safe_fn(uf.name)
-        data = bytes(uf.getbuffer())
+        # Read bytes safely — works for both UploadedFile and raw file-like objects
+        try:
+            data = bytes(uf.getbuffer())
+        except Exception:
+            uf.seek(0)
+            data = uf.read()
 
         local_path = os.path.join(tmpdir, f"{uuid.uuid4().hex}_{fn}")
         with open(local_path, "wb") as f:
@@ -1141,7 +1162,16 @@ def process_uploaded_resumes(uploaded_files, department: str) -> Tuple[int, int,
         raw_key = build_raw_resume_key(department, fn)
         parsed_key = build_parsed_resume_key(department, fn)
 
-        s3_put_bytes(RAW_RESUME_BUCKET, raw_key, data, "application/pdf")
+        # Upload raw PDF to RAW_RESUME_BUCKET
+        try:
+            s3_put_bytes(RAW_RESUME_BUCKET, raw_key, data, "application/pdf")
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to upload '{fn}' to S3 bucket '{RAW_RESUME_BUCKET}' "
+                f"(key: {raw_key}). Check IAM permissions and bucket region.\n"
+                f"Original error: {e}"
+            ) from e
+
         saved.append((local_path, fn, RAW_RESUME_BUCKET, raw_key, parsed_key))
 
     ok = no_text = failed = 0
@@ -1150,32 +1180,40 @@ def process_uploaded_resumes(uploaded_files, department: str) -> Tuple[int, int,
     status = st.empty()
 
     def worker(pdf_path: str, orig_fn: str, raw_bucket: str, raw_key: str, parsed_key: str):
-        data = parse_resume_pdf_to_json(
+        parsed = parse_resume_pdf_to_json(
             pdf_path,
             department=department,
             original_filename=orig_fn,
         )
-        if data is None:
+        if parsed is None:
             return ("no_text", None)
 
-        data.setdefault("candidate", {})
-        data.setdefault("metadata", {})
+        parsed.setdefault("candidate", {})
+        parsed.setdefault("metadata", {})
 
-        data["candidate"]["raw_resume_bucket"] = raw_bucket
-        data["candidate"]["raw_resume_key"] = raw_key
-        data["candidate"]["parsed_resume_bucket"] = PARSED_RESUME_BUCKET
-        data["candidate"]["parsed_resume_key"] = parsed_key
+        parsed["candidate"]["raw_resume_bucket"] = raw_bucket
+        parsed["candidate"]["raw_resume_key"] = raw_key
+        parsed["candidate"]["parsed_resume_bucket"] = PARSED_RESUME_BUCKET
+        parsed["candidate"]["parsed_resume_key"] = parsed_key
 
-        data["metadata"]["storage"] = {
+        parsed["metadata"]["storage"] = {
             "raw_bucket": raw_bucket,
             "raw_key": raw_key,
             "parsed_bucket": PARSED_RESUME_BUCKET,
             "parsed_key": parsed_key,
         }
 
-        s3_put_json(PARSED_RESUME_BUCKET, parsed_key, data)
+        # Store parsed JSON to PARSED_RESUME_BUCKET
+        try:
+            s3_put_json(PARSED_RESUME_BUCKET, parsed_key, parsed)
+        except Exception as e:
+            raise RuntimeError(
+                f"Failed to write parsed JSON for '{orig_fn}' to "
+                f"bucket '{PARSED_RESUME_BUCKET}' (key: {parsed_key}). "
+                f"Check IAM permissions and bucket region.\nOriginal error: {e}"
+            ) from e
 
-        pid = upsert_resume(data)
+        pid = upsert_resume(parsed)
         return ("ok", pid)
 
     total, completed = len(saved), 0
