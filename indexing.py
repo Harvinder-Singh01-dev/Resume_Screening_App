@@ -62,7 +62,7 @@ QDRANT_PORT         = int(os.getenv("QDRANT_PORT",      "6333"))
 COLLECTION          = os.getenv("QDRANT_COLLECTION",    "candidates")
 MAX_WORKERS         = int(os.getenv("PROCESS_MAX_WORKERS", "8"))
 DRY_RUN             = os.getenv("DRY_RUN", "false").lower() == "true"
-JSON_PREFIX         = os.getenv("PARSED_RESUME_PREFIX", "")   # leave blank = entire bucket
+JSON_PREFIX         = ""   # JSON files are at bucket root — no prefix/folder
 
 if not PARSED_BUCKET:
     raise EnvironmentError(
@@ -281,7 +281,7 @@ def bulk_index():
     ensure_collection()
 
     # 2. List all JSON files in the parsed bucket
-    log.info("Listing JSON files in s3://%s/%s …", PARSED_BUCKET, JSON_PREFIX)
+    log.info("Listing JSON files in s3://%s/ (bucket root) …", PARSED_BUCKET)
     keys = list_s3_json_keys(PARSED_BUCKET, prefix=JSON_PREFIX)
 
     if not keys:
