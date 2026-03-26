@@ -1331,7 +1331,7 @@ st.markdown("""
 <div style="padding:18px 0 6px 0;">
     <h1 style="margin:0; font-size:1.95rem; font-weight:800; color:#0c2340;
                font-family:'Plus Jakarta Sans',sans-serif; letter-spacing:-0.5px;">
-        📋&nbsp; Resume Intelligence Portal
+        Resume Intelligence Engine
     </h1>
     <p style="margin:5px 0 0 0; font-size:0.9rem; color:#4a7fa5; font-weight:400;">
         Search and screen candidates intelligently using AI-powered semantic matching
