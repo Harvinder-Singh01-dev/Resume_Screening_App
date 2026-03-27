@@ -14,10 +14,11 @@ S3_REGION   = os.getenv('S3_REGION')
 
 s3 = boto3.client("s3", region_name=S3_REGION)
 
+
 def upload_resume(local_file_path: str, department: str):
     """
     Uploads a PDF to:
-    s3://raw_resume_pool/Resume_Bank/<department>/<filename>.pdf
+    s3://raw_resume_pool/Resume_Bank/General/Rakesh.pdf
     """
 
     if not os.path.exists(local_file_path):
@@ -30,7 +31,8 @@ def upload_resume(local_file_path: str, department: str):
 
     filename = os.path.basename(local_file_path)
     s3_key   = f"{PREFIX}{department}/{filename}"
-    # e.g. → Resume_Bank/General/Rakesh.pdf
+    # Resume_Bank/ + General + / + Rakesh.pdf
+    # → Resume_Bank/General/Rakesh.pdf ✅
 
     logger.info("Uploading   : %s", local_file_path)
     logger.info("S3 Location : s3://%s/%s", BUCKET_NAME, s3_key)
@@ -51,10 +53,11 @@ def upload_resume(local_file_path: str, department: str):
 def list_pdfs_in_department(department: str):
     """
     Lists all PDFs under:
-    s3://raw_resume_pool/Resume_Bank/<department>/
+    s3://raw_resume_pool/Resume_Bank/General/
     """
     folder_prefix = f"{PREFIX}{department}/"
-    # e.g. → Resume_Bank/Finance/
+    # Resume_Bank/ + General + /
+    # → Resume_Bank/General/ ✅
 
     paginator = s3.get_paginator("list_objects_v2")
     pages     = paginator.paginate(Bucket=BUCKET_NAME, Prefix=folder_prefix)
@@ -78,8 +81,8 @@ def list_pdfs_in_department(department: str):
 # ─── Entry Point ──────────────────────────────────────────────────────────────
 if __name__ == "__main__":
 
-    LOCAL_PDF_PATH = "Rakesh.pdf"   
-    DEPARTMENT     = "General"                      
+    LOCAL_PDF_PATH = "Rakesh.pdf"    # PDF file on EC2
+    DEPARTMENT     = "General"       # Department folder name
 
     upload_resume(LOCAL_PDF_PATH, DEPARTMENT)
     list_pdfs_in_department(DEPARTMENT)
