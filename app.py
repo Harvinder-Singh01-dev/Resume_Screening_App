@@ -9,16 +9,6 @@ from typing import Any, Dict, List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dotenv import load_dotenv
 load_dotenv()
-
-# ── Streamlit server config (must happen before any st.* call) ───────────────
-# Fixes "AxiosError: Request failed with status code 403" on EC2.
-# When the app is accessed via a public IP/domain, Streamlit's built-in XSRF
-# and CORS protection blocks every file upload and API call from the browser.
-os.environ.setdefault("STREAMLIT_SERVER_ENABLE_XSRF_PROTECTION", "false")
-os.environ.setdefault("STREAMLIT_SERVER_ENABLE_CORS", "false")
-os.environ.setdefault("STREAMLIT_SERVER_HEADLESS", "true")
-os.environ.setdefault("STREAMLIT_SERVER_MAX_UPLOAD_SIZE", "200")
-
 import streamlit as st
 import boto3
 from botocore.config import Config
@@ -31,7 +21,8 @@ from qdrant_client.http import models as qmodels
 # PAGE CONFIG
 # ============================================================
 st.set_page_config(
-    page_title="Resume Intelligence Engine",
+    page_title="Resume Intelligence Portal",
+    page_icon="📋",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -62,8 +53,29 @@ LOGO_B64 = get_logo_base64("minda_logo.png")
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Instrument+Serif:ital@0;1&display=swap');
+@import url('https://fonts.googleapis.com/icon?family=Material+Icons');
 
+/* ─── GLOBAL FONT FIX – keep material icons intact ─── */
+.material-icons {
+    font-family: 'Material Icons' !important;
+    font-weight: normal !important;
+    font-style: normal !important;
+    font-size: 24px !important;
+    line-height: 1 !important;
+    letter-spacing: normal !important;
+    text-transform: none !important;
+    display: inline-block !important;
+    white-space: nowrap !important;
+    word-wrap: normal !important;
+}
+
+/* ─── CSS VARIABLES ─── */
 :root {
+    /* Navy-black gradient palette */
+    --grad-start:  #0c2340;   /* deep navy */
+    --grad-mid:    #1a3a5c;   /* mid navy */
+    --grad-end:    #000000;   /* black */
+
     --sky-light:  #e0f2fe;
     --sky-mid:    #bae6fd;
     --sky-deep:   #7dd3fc;
@@ -78,39 +90,87 @@ st.markdown("""
     --shadow:     0 4px 24px rgba(3,105,161,0.12);
     --shadow-sm:  0 2px 10px rgba(3,105,161,0.08);
     --r-sm: 8px; --r-md: 12px; --r-lg: 18px;
+
+    /* Navy-black gradient shorthand */
+    --navy-grad: linear-gradient(160deg, var(--grad-start) 0%, var(--grad-mid) 55%, var(--grad-end) 100%);
+    --navy-shadow: 0 4px 20px rgba(12,35,64,0.45);
 }
 
+/* ─── APP BACKGROUND ─── */
 .stApp {
     background: linear-gradient(145deg, #cfe8fc 0%, #d9eeff 30%, #c3dff7 60%, #b8d9f5 100%) !important;
     font-family: 'Plus Jakarta Sans', sans-serif !important;
     min-height: 100vh;
 }
 
+/* ─── SIDEBAR ─── */
 [data-testid="stSidebar"] {
-    background: linear-gradient(180deg, #ffffff 0%, #f0f8ff 60%, #e6f4fd 100%) !important;
+    background: linear-gradient(145deg, #cfe8fc 0%, #d9eeff 30%, #c3dff7 60%, #b8d9f5 100%) !important;
     border-right: 1px solid rgba(14,165,233,0.15) !important;
     box-shadow: 3px 0 20px rgba(3,105,161,0.08) !important;
 }
 [data-testid="stSidebar"] > div:first-child { padding-top: 0 !important; }
-[data-testid="stSidebar"] * { font-family: 'Plus Jakarta Sans', sans-serif !important; }
+[data-testid="stSidebar"] { font-family: 'Plus Jakarta Sans', sans-serif !important; }
 [data-testid="stSidebar"] h1,[data-testid="stSidebar"] h2,
 [data-testid="stSidebar"] h3,[data-testid="stSidebar"] h4,
 [data-testid="stSidebar"] h5,[data-testid="stSidebar"] p,
 [data-testid="stSidebar"] label,[data-testid="stSidebar"] span,
 [data-testid="stSidebar"] div { color: var(--text-dark) !important; }
+
+/* ── Sidebar section headings — DARK navy color ── */
 [data-testid="stSidebar"] h4 {
-    color: var(--sky-dark) !important; font-weight: 700 !important;
-    font-size: 0.82rem !important; text-transform: uppercase !important;
-    letter-spacing: 0.7px !important; border-bottom: 2px solid var(--sky-mid) !important;
-    padding-bottom: 5px !important; margin-bottom: 10px !important;
+    color: #0c2340 !important;
+    font-weight: 800 !important;
+    font-size: 0.80rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.8px !important;
+    border: none !important;
+    border-bottom: 2px solid rgba(12,35,64,0.30) !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    padding: 0 0 5px 0 !important;
+    margin: 14px 0 10px 0 !important;
+    cursor: default !important;
+    pointer-events: none !important;
 }
 
+/* Kill any expander summary / details styling inside sidebar */
+[data-testid="stSidebar"] details,
+[data-testid="stSidebar"] summary {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    list-style: none !important;
+    cursor: pointer !important;
+}
+[data-testid="stSidebar"] summary::-webkit-details-marker { display: none !important; }
+[data-testid="stSidebar"] summary::marker { display: none !important; }
+
+/* ── STOP sidebar color rule from bleeding into stButton text ── */
+[data-testid="stSidebar"] .stButton > button,
+[data-testid="stSidebar"] .stButton > button *,
+[data-testid="stSidebar"] .stButton > button p,
+[data-testid="stSidebar"] .stButton > button span,
+[data-testid="stSidebar"] .stButton > button div {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+}
+
+/* ─── MAIN CONTENT AREA — zero top padding, flush to header ─── */
 .main .block-container {
     background: transparent !important;
-    padding: 1.2rem 2rem 2rem 2rem !important;
+    padding: 0rem 2rem 2rem 2rem !important;
     max-width: 1400px !important;
 }
 
+/* Remove Streamlit's default top spacer */
+.main .block-container > div:first-child {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
+}
+
+/* ─── INPUTS ─── */
 .stTextInput > div > div > input,
 .stNumberInput > div > div > input,
 .stTextArea > div > div > textarea {
@@ -143,6 +203,7 @@ st.markdown("""
     letter-spacing: 0.5px !important;
 }
 
+/* ─── SELECTBOX ─── */
 .stSelectbox > div > div {
     background: var(--white) !important;
     border: 1.5px solid rgba(14,165,233,0.30) !important;
@@ -151,21 +212,37 @@ st.markdown("""
 }
 .stSelectbox > div > div:hover { border-color: var(--sky-accent) !important; }
 
+/* ─── PRIMARY BUTTONS – NAVY-BLACK GRADIENT, WHITE TEXT ─── */
+.stButton > button,
+.stButton > button *,
+.stButton > button p,
+.stButton > button span {
+    color: #ffffff !important;
+    -webkit-text-fill-color: #ffffff !important;
+}
 .stButton > button {
-    background: linear-gradient(135deg, var(--sky-accent) 0%, var(--sky-dark) 100%) !important;
-    color: var(--white) !important; border: none !important;
-    border-radius: var(--r-md) !important; padding: 0.55rem 1.6rem !important;
-    font-weight: 700 !important; font-size: 0.88rem !important;
-    box-shadow: 0 4px 14px rgba(3,105,161,0.30) !important;
-    transition: all 0.2s ease !important;
-    font-family: 'Plus Jakarta Sans', sans-serif !important;
+    background: var(--navy-grad) !important;
+    border: none !important;
+    border-radius: 14px !important;
+    padding: 0.65rem 1.8rem !important;
+    font-weight: 800 !important;
+    font-size: 0.9rem !important;
+    letter-spacing: 0.3px !important;
+    box-shadow: var(--navy-shadow) !important;
+    transition: all 0.22s ease !important;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.25) !important;
 }
 .stButton > button:hover {
-    background: linear-gradient(135deg, #0284c7 0%, #075985 100%) !important;
-    box-shadow: 0 6px 20px rgba(3,105,161,0.40) !important;
-    transform: translateY(-1px) !important;
+    background: linear-gradient(160deg, #091b30 0%, #0f2847 55%, #000000 100%) !important;
+    transform: translateY(-2px) !important;
+    box-shadow: 0 8px 28px rgba(12,35,64,0.55) !important;
+}
+.stButton > button:active {
+    transform: translateY(0px) !important;
+    box-shadow: 0 3px 12px rgba(12,35,64,0.40) !important;
 }
 
+/* ─── DOWNLOAD BUTTONS ─── */
 .stDownloadButton > button {
     background: linear-gradient(135deg, #0d9488 0%, #0369a1 100%) !important;
     color: var(--white) !important; border: none !important;
@@ -179,6 +256,7 @@ st.markdown("""
     box-shadow: 0 5px 16px rgba(13,148,136,0.40) !important;
 }
 
+/* ─── FILE UPLOADER ─── */
 [data-testid="stFileUploadDropzone"] {
     background: rgba(186,230,253,0.30) !important;
     border: 2px dashed rgba(14,165,233,0.40) !important;
@@ -188,6 +266,7 @@ st.markdown("""
     background: rgba(186,230,253,0.50) !important; border-color: var(--sky-accent) !important;
 }
 
+/* ─── ALERTS ─── */
 .stSuccess > div {
     background: rgba(16,185,129,0.10) !important;
     border: 1px solid rgba(16,185,129,0.35) !important;
@@ -209,6 +288,7 @@ st.markdown("""
     border-radius: var(--r-md) !important; color: var(--text-mid) !important;
 }
 
+/* ─── EXPANDERS ─── */
 .stExpander {
     background: rgba(255,255,255,0.70) !important;
     border: 1px solid rgba(14,165,233,0.18) !important;
@@ -223,29 +303,44 @@ st.markdown("""
 }
 [data-testid="stExpander"] summary:hover { background: rgba(186,230,253,0.55) !important; }
 
+/* ─── PROGRESS BAR ─── */
 .stProgress > div > div {
-    background: linear-gradient(90deg, var(--sky-accent), var(--sky-dark)) !important;
+    background: var(--navy-grad) !important;
     border-radius: 4px !important;
 }
 .stProgress > div {
     background: rgba(14,165,233,0.15) !important; border-radius: 4px !important;
 }
 
+/* ─── MARKDOWN TEXT ─── */
 .stMarkdown p,.stMarkdown span,.stMarkdown li { color: var(--text-dark) !important; }
 .stMarkdown h1,.stMarkdown h2,.stMarkdown h3,.stMarkdown h4 {
     color: var(--sky-dark) !important; font-family: 'Plus Jakarta Sans', sans-serif !important;
 }
 
+/* ─── HIDE STREAMLIT CHROME ─── */
 #MainMenu { visibility: hidden; }
 footer { visibility: hidden; }
-header { visibility: hidden; }
 
+/* ── TOP HEADER BAR — matches the light app background ── */
+header {
+    visibility: visible !important;
+    height: 20px !important;
+    min-height: 10px !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: linear-gradient(135deg, #cfe8fc 0%, #c3dff7 100%) !important;
+    border-bottom: 1px solid rgba(14,165,233,0.20) !important;
+}
+
+/* ─── DIVIDER ─── */
 hr {
     border: none !important;
     border-top: 1.5px solid rgba(14,165,233,0.20) !important;
     margin: 12px 0 !important;
 }
 
+/* ─── COMPONENT CLASSES ─── */
 .skill-badge {
     display: inline-block; padding: 3px 10px; margin: 2px;
     background: rgba(14,165,233,0.12); color: var(--sky-dark);
@@ -266,12 +361,13 @@ hr {
     box-shadow: 0 6px 28px rgba(3,105,161,0.14); transform: translateX(2px);
 }
 
+/* ── Rank badge — navy-black gradient ── */
 .rank-badge {
     display: inline-flex; align-items: center; justify-content: center;
     width: 30px; height: 30px; border-radius: 50%;
-    background: linear-gradient(135deg, var(--sky-accent), var(--sky-dark));
+    background: var(--navy-grad);
     color: var(--white); font-weight: 800; font-size: 0.82rem; margin-right: 10px;
-    box-shadow: 0 2px 8px rgba(3,105,161,0.30); flex-shrink: 0;
+    box-shadow: 0 2px 10px rgba(12,35,64,0.40); flex-shrink: 0;
 }
 
 .stat-chip {
@@ -307,6 +403,38 @@ hr {
     border-radius: 5px; padding: 6px 10px; margin: 4px 0 4px 12px;
     font-size: 0.78rem; line-height: 1.45; color: var(--text-mid);
 }
+
+/* ─── HERO HEADER — navy-black gradient text, flush to top ─── */
+.hero-wrapper {
+    padding: 8px 0 6px 0;
+    margin-top: 0 !important;
+}
+.hero-title {
+    margin: 0 0 0px 0;
+    font-size: 3.2rem;
+    font-weight: 1200;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    letter-spacing: 0.5px;
+    background: #000052;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    display: inline-block;
+    filter: drop-shadow(0 2px 6px rgba(12,35,64,0.18));
+    paint-order: stroke fill;
+}
+.hero-subtitle {
+    margin: 0 0 14px 0;
+    font-size: 1.0rem;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    background: linear-gradient(135deg, #0c2340 0%, #0a3d6b 55%, #000000 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    display: inline-block;
+    opacity: 0.90;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -333,6 +461,8 @@ print("Raw Resume Suffix : ", RAW_RESUME_PREFIX)
 
 MAX_WORKERS = int(os.getenv("PROCESS_MAX_WORKERS", "4"))
 
+MAX_WORKERS = 4
+
 if not RAW_RESUME_BUCKET:
     st.warning("RAW_RESUME_BUCKET is not set.")
 if not PARSED_RESUME_BUCKET:
@@ -350,10 +480,8 @@ def get_clients():
         retries={"max_attempts": 5}
     )
 
-    # verify=False removed — it breaks SigV4 signing used by EC2 IAM roles and
-    # is a security risk. S3 region now reads from S3_REGION env var (not hardcoded).
-    s3 = boto3.client("s3", region_name=S3_REGION, config=cfg)
-    bedrock = boto3.client("bedrock-runtime", region_name=AWS_REGION, config=cfg)
+    s3 = boto3.client("s3", region_name='ap-south-1')
+    bedrock = boto3.client("bedrock-runtime", region_name=AWS_REGION)
     qdrant = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, timeout=60)
 
     return s3, qdrant, bedrock
@@ -393,7 +521,6 @@ def build_raw_resume_key(department: str, filename: str) -> str:
     return f"{RAW_RESUME_PREFIX}/{dept}/{uuid.uuid4().hex}_{_safe_fn(filename)}"
 
 
-# Parsed bucket has JSON files directly at bucket root
 def build_parsed_resume_key(department: str, filename: str) -> str:
     stem = Path(_safe_fn(filename)).stem
     return f"{uuid.uuid4().hex}_{stem}.json"
@@ -402,9 +529,8 @@ def build_parsed_resume_key(department: str, filename: str) -> str:
 # ============================================================
 # BEDROCK EMBEDDING
 # ============================================================
+@st.cache_data(show_spinner=False)
 def bedrock_embed(text: str) -> List[float]:
-    # NOTE: @st.cache_data intentionally removed — it is not thread-safe and
-    # causes silent failures when called from ThreadPoolExecutor workers.
     text = (text or "").strip() or "N/A"
     resp = bedrock_runtime.invoke_model(
         modelId=EMBED_MODEL_ID,
@@ -1010,8 +1136,7 @@ def render_candidate_card(idx: int, result: Dict[str, Any], jd_text: str):
                   flex-wrap:wrap;gap:10px;">
         <div style="flex:1;min-width:220px;">
           <div style="display:flex;align-items:center;margin-bottom:5px;">
-            <span class="rank-badge"
-                  style="background:linear-gradient(135deg,{accent},{accent}cc);">#{idx}</span>
+            <span class="rank-badge">#{idx}</span>
             <span style="font-size:1.18rem;font-weight:800;color:#0c2340;
                          font-family:'Plus Jakarta Sans',sans-serif;letter-spacing:-0.3px;">{name}</span>
           </div>
@@ -1134,25 +1259,16 @@ def process_uploaded_resumes(uploaded_files, department: str) -> Tuple[int, int,
         return 0, 0, 0, []
 
     if not RAW_RESUME_BUCKET or not PARSED_RESUME_BUCKET:
-        raise ValueError(
-            "RAW_RESUME_BUCKET and PARSED_RESUME_BUCKET env vars must be set. "
-            "Check your .env or EC2 environment."
-        )
+        raise ValueError("RAW_RESUME_BUCKET and PARSED_RESUME_BUCKET must be configured.")
 
     tmpdir = os.path.join(tempfile.gettempdir(), "resume_screening_uploads")
     os.makedirs(tmpdir, exist_ok=True)
 
     saved: List[Tuple[str, str, str, str, str]] = []
-    # (local_pdf_path, original_filename, raw_bucket, raw_key, parsed_key)
 
     for uf in uploaded_files:
         fn = _safe_fn(uf.name)
-        # Read bytes safely — works for both UploadedFile and raw file-like objects
-        try:
-            data = bytes(uf.getbuffer())
-        except Exception:
-            uf.seek(0)
-            data = uf.read()
+        data = bytes(uf.getbuffer())
 
         local_path = os.path.join(tmpdir, f"{uuid.uuid4().hex}_{fn}")
         with open(local_path, "wb") as f:
@@ -1161,16 +1277,7 @@ def process_uploaded_resumes(uploaded_files, department: str) -> Tuple[int, int,
         raw_key = build_raw_resume_key(department, fn)
         parsed_key = build_parsed_resume_key(department, fn)
 
-        # Upload raw PDF to RAW_RESUME_BUCKET
-        try:
-            s3_put_bytes(RAW_RESUME_BUCKET, raw_key, data, "application/pdf")
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to upload '{fn}' to S3 bucket '{RAW_RESUME_BUCKET}' "
-                f"(key: {raw_key}). Check IAM permissions and bucket region.\n"
-                f"Original error: {e}"
-            ) from e
-
+        s3_put_bytes(RAW_RESUME_BUCKET, raw_key, data, "application/pdf")
         saved.append((local_path, fn, RAW_RESUME_BUCKET, raw_key, parsed_key))
 
     ok = no_text = failed = 0
@@ -1179,40 +1286,32 @@ def process_uploaded_resumes(uploaded_files, department: str) -> Tuple[int, int,
     status = st.empty()
 
     def worker(pdf_path: str, orig_fn: str, raw_bucket: str, raw_key: str, parsed_key: str):
-        parsed = parse_resume_pdf_to_json(
+        data = parse_resume_pdf_to_json(
             pdf_path,
             department=department,
             original_filename=orig_fn,
         )
-        if parsed is None:
+        if data is None:
             return ("no_text", None)
 
-        parsed.setdefault("candidate", {})
-        parsed.setdefault("metadata", {})
+        data.setdefault("candidate", {})
+        data.setdefault("metadata", {})
 
-        parsed["candidate"]["raw_resume_bucket"] = raw_bucket
-        parsed["candidate"]["raw_resume_key"] = raw_key
-        parsed["candidate"]["parsed_resume_bucket"] = PARSED_RESUME_BUCKET
-        parsed["candidate"]["parsed_resume_key"] = parsed_key
+        data["candidate"]["raw_resume_bucket"] = raw_bucket
+        data["candidate"]["raw_resume_key"] = raw_key
+        data["candidate"]["parsed_resume_bucket"] = PARSED_RESUME_BUCKET
+        data["candidate"]["parsed_resume_key"] = parsed_key
 
-        parsed["metadata"]["storage"] = {
+        data["metadata"]["storage"] = {
             "raw_bucket": raw_bucket,
             "raw_key": raw_key,
             "parsed_bucket": PARSED_RESUME_BUCKET,
             "parsed_key": parsed_key,
         }
 
-        # Store parsed JSON to PARSED_RESUME_BUCKET
-        try:
-            s3_put_json(PARSED_RESUME_BUCKET, parsed_key, parsed)
-        except Exception as e:
-            raise RuntimeError(
-                f"Failed to write parsed JSON for '{orig_fn}' to "
-                f"bucket '{PARSED_RESUME_BUCKET}' (key: {parsed_key}). "
-                f"Check IAM permissions and bucket region.\nOriginal error: {e}"
-            ) from e
+        s3_put_json(PARSED_RESUME_BUCKET, parsed_key, data)
 
-        pid = upsert_resume(parsed)
+        pid = upsert_resume(data)
         return ("ok", pid)
 
     total, completed = len(saved), 0
@@ -1325,21 +1424,14 @@ with st.sidebar:
 
 
 # ============================================================
-# MAIN CONTENT
+# MAIN CONTENT — HERO HEADER (navy-black gradient, flush to top)
 # ============================================================
 st.markdown("""
-<div style="padding:18px 0 6px 0;">
-    <h1 style="margin:0; font-size:1.95rem; font-weight:800; color:#0c2340;
-               font-family:'Plus Jakarta Sans',sans-serif; letter-spacing:-0.5px;">
-        Resume Intelligence Engine
-    </h1>
-    <p style="margin:5px 0 0 0; font-size:0.9rem; color:#4a7fa5; font-weight:400;">
-        Search and screen candidates intelligently using AI-powered semantic matching
-    </p>
+<div class="hero-wrapper" style="text-align:center; padding: 8px 0 6px 0; margin-top:0;">
+  <h1 class="hero-title">Resume Intelligence Engine</h1><br>
+  <p class="hero-subtitle">AI Recruiter Copilot — match the right talent, instantly</p>
 </div>
 """, unsafe_allow_html=True)
-
-st.markdown("<hr>", unsafe_allow_html=True)
 
 jd_col, ctrl_col = st.columns([3, 1])
 
@@ -1347,7 +1439,7 @@ with jd_col:
     jd_text = st.text_area(
         "Job Description",
         height=185,
-        placeholder="📝  Paste the full job description here — role, responsibilities, required skills…",
+        placeholder="Paste the full job description here — role, responsibilities, required skills…",
     )
 
 with ctrl_col:
