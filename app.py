@@ -459,23 +459,23 @@ hr {
 AWS_REGION = os.getenv("AWS_REGION", "us-east-1")
 S3_REGION = os.getenv("S3_REGION", "ap-south-1")
 EMBED_MODEL_ID = os.getenv("EMBED_MODEL_ID", "amazon.titan-embed-text-v1") # amazon.titan-embed-text-v1
-print(f'Embedd model id {EMBED_MODEL_ID}')
+print(f'Embedding model id {EMBED_MODEL_ID}')
 LLM_MODEL_ID = os.getenv("BEDROCK_MODEL_ID", "anthropic.claude-3-5-sonnet-20240620-v1:0") # anthropic.claude-3-5-sonnet-20240620-v1:0
-print(f'llm model id {LLM_MODEL_ID}')
+print(f'Bedrock LLM model id {LLM_MODEL_ID}')
 
 QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
-print(f'Qdrant host {QDRANT_HOST}')
+print(f'Qdrant host : {QDRANT_HOST}')
 QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
-print(f'Qdrant port {QDRANT_PORT}')
+print(f'Qdrant port : {QDRANT_PORT}')
 COLLECTION = os.getenv("QDRANT_COLLECTION", "candidates")
-print(f'Collection name {COLLECTION}')
+print(f'Collection name : {COLLECTION}')
 
 RAW_RESUME_BUCKET = os.getenv("RAW_RESUME_BUCKET", "")
 print("Raw Resume Bucket : ", RAW_RESUME_BUCKET)
 PARSED_RESUME_BUCKET = os.getenv("PARSED_RESUME_BUCKET", "")
 print("Parsed Resume Bucket : ", PARSED_RESUME_BUCKET)
 RAW_RESUME_PREFIX = os.getenv("RAW_RESUME_PREFIX", "Resume_Bank")
-print("Raw Resume Suffix : ", RAW_RESUME_PREFIX)
+print("Raw Resume S3 bucket Suffix Name : ", RAW_RESUME_PREFIX)
 
 MAX_WORKERS = int(os.getenv("PROCESS_MAX_WORKERS", "4"))
 
@@ -498,8 +498,8 @@ def get_clients():
         retries={"max_attempts": 5}
     )
 
-    s3 = boto3.client("s3", region_name='ap-south-1', config=cfg)
-    bedrock = boto3.client("bedrock-runtime", region_name=AWS_REGION, config=cfg)
+    s3 = boto3.client("s3", region_name='ap-south-1', config = cfg)
+    bedrock = boto3.client("bedrock-runtime", region_name=AWS_REGION, config = cfg )
     qdrant = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, timeout=60)
 
     return s3, qdrant, bedrock
