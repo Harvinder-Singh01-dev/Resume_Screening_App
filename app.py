@@ -498,8 +498,8 @@ def get_clients():
         retries={"max_attempts": 5}
     )
 
-    s3 = boto3.client("s3", region_name='ap-south-1')
-    bedrock = boto3.client("bedrock-runtime", region_name=AWS_REGION)
+    s3 = boto3.client("s3", region_name='ap-south-1', config=cfg)
+    bedrock = boto3.client("bedrock-runtime", region_name=AWS_REGION, config=cfg)
     qdrant = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, timeout=60)
 
     return s3, qdrant, bedrock
