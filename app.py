@@ -7,8 +7,8 @@ import base64
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dotenv import load_dotenv
-load_dotenv()
+# from dotenv import load_dotenv
+# load_dotenv(dotenv_path=os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"))
 import streamlit as st
 import boto3
 from botocore.config import Config
@@ -16,6 +16,24 @@ from pypdf import PdfReader
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qmodels
 
+
+_env_candidates = [
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env"),
+    os.path.join(os.getcwd(), ".env"),
+    os.path.expanduser("~/.env"),
+]
+for _ep in _env_candidates:
+    if os.path.exists(_ep):
+        with open(_ep) as _f:
+            for _line in _f:
+                _line = _line.strip()
+                if _line and not _line.startswith("#") and "=" in _line:
+                    _k, _v = _line.split("=", 1)
+                    os.environ.setdefault(_k.strip(), _v.strip())
+        print(f"✅ .env loaded from: {_ep}")
+        break
+else:
+    print("⚠️  No .env file found — relying on system environment variables")
 
 # ============================================================
 # PAGE CONFIG
