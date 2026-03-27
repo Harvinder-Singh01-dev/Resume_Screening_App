@@ -19,7 +19,7 @@ PREFIX      = os.getenv('RAW_RESUME_PREFIX')
 S3_REGION = os.getenv('S3_REGION')    
 
 # ─── S3 Client (uses EC2 IAM Role automatically) ──────────────────────────────
-s3 = boto3.client("boto3", region_name=S3_REGION)  
+s3 = boto3.client("s3", region_name=S3_REGION)
 
 
 def list_departments(bucket: str, prefix: str) -> list[str]:
