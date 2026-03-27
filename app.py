@@ -481,7 +481,7 @@ def get_clients():
     )
 
     s3 = boto3.client("s3", region_name='ap-south-1', verify = False)
-    bedrock = boto3.client("bedrock-runtime", region_name=AWS_REGION, Verify = False)
+    bedrock = boto3.client("bedrock-runtime", region_name=AWS_REGION, verify = False)
     qdrant = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, timeout=60)
 
     return s3, qdrant, bedrock
