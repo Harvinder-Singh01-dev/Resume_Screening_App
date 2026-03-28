@@ -467,17 +467,17 @@ QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
 print(f'Qdrant host : {QDRANT_HOST}')
 QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
 print(f'Qdrant port : {QDRANT_PORT}')
-COLLECTION = os.getenv("QDRANT_COLLECTION", "candidates")
+COLLECTION =  "candidates"
 print(f'Collection name : {COLLECTION}')
 
-RAW_RESUME_BUCKET = os.getenv("RAW_RESUME_BUCKET", "")
+RAW_RESUME_BUCKET = 'resume-screening-uploads-new'                      #os.getenv("RAW_RESUME_BUCKET", "")
 print("Raw Resume Bucket : ", RAW_RESUME_BUCKET)
-PARSED_RESUME_BUCKET = os.getenv("PARSED_RESUME_BUCKET", "")
+PARSED_RESUME_BUCKET = 'resume-screening-json'                          #os.getenv("PARSED_RESUME_BUCKET", "")
 print("Parsed Resume Bucket : ", PARSED_RESUME_BUCKET)
-RAW_RESUME_PREFIX = os.getenv("RAW_RESUME_PREFIX", "Resume_Bank")
+RAW_RESUME_PREFIX = 'Resume_Bank/'                                        #os.getenv("RAW_RESUME_PREFIX", "Resume_Bank")
 print("Raw Resume S3 bucket Suffix Name : ", RAW_RESUME_PREFIX)
 
-MAX_WORKERS = int(os.getenv("PROCESS_MAX_WORKERS", "4"))
+# MAX_WORKERS = int(os.getenv("PROCESS_MAX_WORKERS", "4"))
 
 MAX_WORKERS = 4
 
@@ -499,8 +499,8 @@ def get_clients():
     )
 
     s3 = boto3.client("s3", region_name='ap-south-1', config = cfg)
-    bedrock = boto3.client("bedrock-runtime", region_name=AWS_REGION, config = cfg )
-    qdrant = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, timeout=60)
+    bedrock = boto3.client("bedrock-runtime", region_name='us-east-1', config = cfg)
+    qdrant = QdrantClient(host='localhost', port=6333, timeout=60)
 
     return s3, qdrant, bedrock
 
@@ -551,7 +551,7 @@ def build_parsed_resume_key(department: str, filename: str) -> str:
 def bedrock_embed(text: str) -> List[float]:
     text = (text or "").strip() or "N/A"
     resp = bedrock_runtime.invoke_model(
-        modelId=EMBED_MODEL_ID,
+        modelId='amazon.titan-embed-text-v1',
         body=json.dumps({"inputText": text}),
         accept="application/json",
         contentType="application/json",
@@ -729,7 +729,7 @@ def _llm_call(messages, max_tokens=3000, temperature=0.0) -> str:
         "messages": messages,
     }
     resp = bedrock_runtime.invoke_model(
-        modelId=LLM_MODEL_ID,
+        modelId='anthropic.claude-3-5-sonnet-20240620-v1:0',
         body=json.dumps(body).encode(),
         contentType="application/json",
         accept="application/json",
