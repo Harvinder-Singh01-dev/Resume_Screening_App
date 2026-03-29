@@ -13,6 +13,7 @@ import streamlit as st
 import boto3
 from botocore.config import Config
 from pypdf import PdfReader
+from docx import Document as DocxDocument
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qmodels
 
@@ -498,8 +499,8 @@ def get_clients():
         retries={"max_attempts": 5}
     )
 
-    s3 = boto3.client("s3", region_name='ap-south-1', config = cfg)
-    bedrock = boto3.client("bedrock-runtime", region_name='us-east-1', config = cfg)
+    s3 = boto3.client("s3", region_name='ap-south-1')   # , config = cfg
+    bedrock = boto3.client("bedrock-runtime", region_name='us-east-1')   # , config = cfg
     qdrant = QdrantClient(host='localhost', port=6333, timeout=60)
 
     return s3, qdrant, bedrock
@@ -532,6 +533,14 @@ def _safe_fn(name: str) -> str:
     name = (name or "resume.pdf").strip()
     name = re.sub(r"[^A-Za-z0-9\._\- ]+", "_", name)
     return name[:180] or "resume.pdf"
+
+
+def _content_type_for(filename: str) -> str:
+    """Return the correct MIME type for PDF or DOCX files."""
+    ext = Path(filename).suffix.lower()
+    if ext == ".docx":
+        return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    return "application/pdf"
 
 
 def build_raw_resume_key(department: str, filename: str) -> str:
@@ -603,7 +612,33 @@ def extract_text_from_pdf(pdf_path: str) -> str:
     return "\n".join(parts).strip()
 
 
-def build_prompt(resume_text: str) -> str:
+def extract_text_from_docx(docx_path: str) -> str:
+    """Extract plain text from a .docx file, preserving paragraph and table structure."""
+    doc = DocxDocument(docx_path)
+    parts: List[str] = []
+    for para in doc.paragraphs:
+        txt = para.text.replace("\x00", "").strip()
+        if txt:
+            parts.append(txt)
+    for table in doc.tables:
+        for row in table.rows:
+            row_texts = [cell.text.replace("\x00", "").strip() for cell in row.cells]
+            row_line = "  |  ".join(t for t in row_texts if t)
+            if row_line:
+                parts.append(row_line)
+    return "\n".join(parts).strip()
+
+
+def extract_text_from_file(file_path: str) -> str:
+    """Dispatch text extraction based on file extension (.pdf or .docx)."""
+    ext = Path(file_path).suffix.lower()
+    if ext == ".docx":
+        return extract_text_from_docx(file_path)
+    return extract_text_from_pdf(file_path)
+
+
+def build_prompt(resume_text: str, source_ext: str = ".pdf") -> str:
+    source_label = "resume_docx" if source_ext == ".docx" else "resume_pdf"
     schema = {
         "candidate": {
             "full_name": None,
@@ -676,7 +711,7 @@ def build_prompt(resume_text: str) -> str:
             "proficiency": None
         }],
         "metadata": {
-            "source": "resume_pdf",
+            "source": source_label,
             "extraction_notes": [],
             "confidence": {
                 "overall": None,
@@ -743,17 +778,19 @@ def _llm_call(messages, max_tokens=3000, temperature=0.0) -> str:
 
 
 def parse_resume_pdf_to_json(
-    pdf_path: str,
+    file_path: str,
     department: str,
     original_filename: str = ""
 ) -> Optional[Dict[str, Any]]:
-    resume_text = extract_text_from_pdf(pdf_path)
+    """Parse a resume (PDF or DOCX) to structured JSON via LLM."""
+    resume_text = extract_text_from_file(file_path)
     if not resume_text:
         return None
 
+    source_ext = Path(file_path).suffix.lower()
     raw = _llm_call([{
         "role": "user",
-        "content": [{"type": "text", "text": build_prompt(resume_text)}]
+        "content": [{"type": "text", "text": build_prompt(resume_text, source_ext)}]
     }])
 
     try:
@@ -777,7 +814,7 @@ def parse_resume_pdf_to_json(
         data["candidate"] = {}
 
     data["candidate"]["department"] = department
-    data["candidate"]["original_filename"] = original_filename or os.path.basename(pdf_path)
+    data["candidate"]["original_filename"] = original_filename or os.path.basename(file_path)
     return data
 
 
@@ -1295,7 +1332,7 @@ def process_uploaded_resumes(uploaded_files, department: str) -> Tuple[int, int,
         raw_key = build_raw_resume_key(department, fn)
         parsed_key = build_parsed_resume_key(department, fn)
 
-        s3_put_bytes(RAW_RESUME_BUCKET, raw_key, data, "application/pdf")
+        s3_put_bytes(RAW_RESUME_BUCKET, raw_key, data, _content_type_for(fn))
         saved.append((local_path, fn, RAW_RESUME_BUCKET, raw_key, parsed_key))
 
     ok = no_text = failed = 0
@@ -1303,9 +1340,9 @@ def process_uploaded_resumes(uploaded_files, department: str) -> Tuple[int, int,
     progress = st.progress(0.0, text="Processing resumes…")
     status = st.empty()
 
-    def worker(pdf_path: str, orig_fn: str, raw_bucket: str, raw_key: str, parsed_key: str):
+    def worker(file_path: str, orig_fn: str, raw_bucket: str, raw_key: str, parsed_key: str):
         data = parse_resume_pdf_to_json(
-            pdf_path,
+            file_path,
             department=department,
             original_filename=orig_fn,
         )
@@ -1336,8 +1373,8 @@ def process_uploaded_resumes(uploaded_files, department: str) -> Tuple[int, int,
 
     with ThreadPoolExecutor(max_workers=max(1, min(MAX_WORKERS, total))) as ex:
         futures = {
-            ex.submit(worker, p, fn, raw_bucket, raw_key, parsed_key): (p, fn)
-            for p, fn, raw_bucket, raw_key, parsed_key in saved
+            ex.submit(worker, fp, orig_fn, rb, rk, pk): (fp, orig_fn)
+            for fp, orig_fn, rb, rk, pk in saved
         }
 
         for fut in as_completed(futures):
@@ -1394,8 +1431,8 @@ with st.sidebar:
     st.markdown("#### 📤 Upload Resumes")
     dept_upload = st.text_input("Department Tag", value="General", key="dept_tag")
     uploaded_files = st.file_uploader(
-        "Drop PDF files here",
-        type=["pdf"],
+        "Drop PDF or Word files here",
+        type=["pdf", "docx"],
         accept_multiple_files=True,
         label_visibility="collapsed"
     )
