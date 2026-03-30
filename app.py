@@ -475,7 +475,7 @@ hr {
     paint-order: stroke fill;
 }
 .hero-subtitle {
-    margin: 0 0 32px 0;
+    margin: 0 0 1px 0;
     font-size: 1.0rem;
     font-weight: 700;
     letter-spacing: 0.3px;
@@ -1474,10 +1474,9 @@ with st.sidebar:
 # MAIN CONTENT — HERO HEADER (navy-black gradient, flush to top)
 # ============================================================
 st.markdown("""
-<div class="hero-wrapper" style="text-align:center; padding: 8px 0 6px 0; margin-top:0;">
+<div class="hero-wrapper" style="text-align:center; padding: 1px 0 1px 0; margin-top:0;">
   <h1 class="hero-title">Resume Intelligence Engine</h1><br>
   <p class="hero-subtitle">AI Recruiter Copilot — match the right talent, instantly</p>
-  <div style="height: 24px;"></div>
 </div>
 """, unsafe_allow_html=True)
 
