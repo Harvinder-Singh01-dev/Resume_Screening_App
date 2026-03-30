@@ -1,3 +1,4 @@
+from enum import verify
 import tempfile
 import os
 import re
@@ -499,7 +500,7 @@ def get_clients():
         retries={"max_attempts": 5}
     )
 
-    s3 = boto3.client("s3", region_name='ap-south-1')   # , config = cfg
+    s3 = boto3.client("s3", region_name='ap-south-1')   # , config = cfg ,  , verify=False
     bedrock = boto3.client("bedrock-runtime", region_name='us-east-1')   # , config = cfg
     qdrant = QdrantClient(host='localhost', port=6333, timeout=60)
 
@@ -1429,13 +1430,14 @@ with st.sidebar:
     st.markdown("<hr>", unsafe_allow_html=True)
 
     st.markdown("#### 📤 Upload Resumes")
-    dept_upload = st.text_input("Department Tag", value="General", key="dept_tag")
     uploaded_files = st.file_uploader(
         "Drop PDF or Word files here",
         type=["pdf", "docx"],
         accept_multiple_files=True,
         label_visibility="collapsed"
     )
+
+    dept_upload = st.text_input("Department Tag", value="General", key="dept_tag")
 
     if st.button("⚡  Process & Index Resumes", use_container_width=True, key="proc_btn"):
         if not uploaded_files:
